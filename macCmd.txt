@@ -1,0 +1,31 @@
+
+1 查看Ls  ls -a
+2 创建目录 mkdir test
+3 进入目录 cd test
+4 返回上一级目录 cd..
+5 删除目录 rmdir test
+  Rm -rf test
+6 创建文件 touch test.txt
+  移动文件 mv test.txt /System/Library/Extensions/backup
+7 删除文件 rm test.txt
+8 copy file.    Cp -R test.txt test2.txt (-R 表示递归)
+9 查找当前目录所有txt文件。find *.txt
+10 显示当前目录 pwd
+11 打开文件或文件夹 open . （打开当前目录）
+   打开指定路径  open path
+12 关机
+   立刻关机：sudo shutdown -h now
+   十分钟后关机：sudo shutdown -h +10
+   晚上八点关机：sudo shutdown -h 20:00
+13 更改文件权限 chmod 参数 权限 文件
+    把目录下所有文件设定到root读写，其他用户只读 chmod -R 755 /Systtem
+14 文件编辑 nano 文件名
+   Nano text.txt 编辑完后 用Ctrl+O 存盘 Ctrl+X 退出
+15 运行脚本命令
+   Sh 脚本文件名
+16 查看命令的帮助。man 命令名   如： man ls
+17 tab 补齐命令
+18 sudo -s 获得系统权限
+19 pwd 显示当前目录的路径名
+20 clear 21 kill 22 env 显示当前设置过的环境变量
+21 cd ~/Library   ~表示当前用户文件夹

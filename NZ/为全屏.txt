@@ -1,0 +1,149 @@
+1背景
+       目前大多数客户端游戏为了给玩家更好的体验，都会提供全屏模式。然而在实际的应用中，出现了一种伪全屏的解决方案。穿越火线就是一个很好的例子。那么真伪全屏到底有什么差异，在实际的测试中，我们应该从哪些方面考虑差异？本文尝试从D3D不同的实现方式来分析两者的不同。
+
+2伪全屏的概念
+真全屏：程序独占显卡资源。 
+
+伪全屏：实质是一个窗口。实现的原理是调整要显示的内容的尺寸与位置，使之正好充满整个屏幕。伪全屏的很好的例子就是如Word、Internet Explorer的全屏显示。 
+
+伪全屏的实质就是窗口模式，只是通过软件的方式将画面在整个屏幕显示而已。
+
+ 
+
+3游戏中真伪全屏的差异
+       明白了伪全屏的概念后，我们要分析一下伪全屏应用在游戏中，与真全屏有什么差异。而在测试中，我们又应该从哪些方面去考虑呢？
+
+ 
+
+3.1为什么真全屏更快
+很容易想到的是真全屏会更快。其原因主要有一下三个方面。
+
+l  真全屏使用不同的缓冲区交换技术 
+
+l  真全屏拥有不同的屏幕刷新频率 
+
+l  真全屏独立占用显存 
+
+       为了更好地理解这三点，我们首先来了解一下D3D的一个设备初始化函数CreateDevice。
+
+ 
+
+HRESULT CreateDevice(
+      UINT Adapter,  //指定显示设备的编号。主设备的值永远是“D3DADAPTER_DEFAULT”。 
+      D3DDEVTYPE DeviceType,  //指定设备类型。 
+      HWND hFocusWindow,     //窗口句柄
+      DWORD BehaviorFlags,    //处理顶点方式
+      D3DPRESENT_PARAMETERS *pPresentationParameters, //  创建的参数
+      IDirect3DDevice9 **ppReturnedDeviceInterface //指向一个D3D设备对象的指针的指针。用它来得到创建好的D3D设备对象 
+
+ );
+
+ 
+
+从上面的函数可以看到，在调用CreateDevice之前需要填充D3DPRESENT_PARAMETERS结构。而D3DPRESENT_PARAMETERS结构的定义如下：
+
+ 
+
+typedef struct _D3DPRESENT_PARAMETERS_ {
+    UINT BackBufferWidth, BackBufferHeight; //后缓冲区宽，高
+    D3DFORMAT BackBufferFormat; //后缓冲区的像素格式
+    UINT BackBufferCount; //后缓冲区个数
+    D3DMULTISAMPLE_TYPE MultiSampleType; //多重采样类型 
+   DWORD MultiSampleQuality; //多重采样质量 0-1之间
+    D3DSWAPEFFECT SwapEffect ; //缓冲区交换方式
+    HWND hDeviceWindow ; //当前窗口，用来指定渲染的窗口
+    BOOL Windowed; //是否是窗口，true(窗口模式) or flase(全屏)
+    BOOL EnableAutoDepthStencil; //是否开启深度缓存,True(开启)，flase(不开启)
+    D3DFORMAT AutoDepthStencilFormat; //是否开启模板缓存,True(开启)，flase(不开启)
+    DWORD Flags; //附加标志
+    UINT FullScreen_RefreshRateInHz; //全屏模式下的屏幕刷新率。如果窗口模式，则必须为0。 
+    UINT PresentationInterval; //缓冲区交换频率， 0不等待立即交换
+} D3DPRESENT_PARAMETERS; 
+
+ 
+
+       这里不详细介绍D3DPRESENT_PARAMETERS的机构，你可以通过MSDN了解到更详细的内容。这里重点说明几个与全屏相关的参数。
+
+ 
+
+其中与缓存交换方式相关的参数：D3DSWAPEFFECT，这是一个枚举，用来指定前后缓冲区的交换方式。其具体的枚举类型如下：
+
+ 
+
+typedef enum D3DSWAPEFFECT { 
+
+D3DSWAPEFFECT_DISCARD = 1, 
+
+D3DSWAPEFFECT_FLIP = 2, 
+
+D3DSWAPEFFECT_COPY = 3, 
+
+D3DSWAPEFFECT_OVERLAY = 4, 
+
+D3DSWAPEFFECT_FLIPEX = 5, 
+
+D3DSWAPEFFECT_FORCE_DWORD = 0xFFFFFFFF 
+
+} D3DSWAPEFFECT, *LPD3DSWAPEFFECT; 
+
+ 
+
+首先来了解一下缓冲区交换技术。之所以要使用缓冲区交换技术，是为了避免将相对较慢的绘制过程放到放前缓冲区(front buffer)进行，保证显示器每次刷新出来的都是完整的一帧画面。所以D3D引入了后缓冲区(back buffer)的概念。后缓冲区用于存储下一帧需要显示的内容。当前一帧显示完成后，后台缓冲区的内容会被交换到前缓冲区，这个交换的过程被称为Presenting，而交换的具体方式就由上面的枚举值决定。
+
+以双缓冲为例，该值选择D3DSWAPEFFECT_COPY，则在交换时，拷贝后缓冲的内容到前缓冲，后缓冲的内容没有变换。该值选择 D3DSWAPEFFECT_FLIP  ，则在交换时，改变可视缓冲区在显存中的起始位置，使其等于后缓冲区的首地址，就可以将后缓冲区显示到屏幕。这种交换方式由于不涉及数据拷贝而速度更快。该值选择 D3DSWAPEFFECT_DISCARD的时候，其交换过程可能是COPY，也可能是FLIP，由设备来确定适合当前情况的方式。叫DISCARD是因为既然不是你自己控制交换方式，显然你也不关心也不需要后缓冲的内容，所以每次交换完，后缓冲的内容就视为"丢弃"了，即不再管理。 事实上，MSDN推荐把这个参数设为D3DSWAPEFFECT_DISCARD。
+
+回到我们的主题。在真全屏情况下，选择DISCARD方式，在Present的时候，是通过FLIP方式交换显示缓冲首地址的。而由于伪全屏的实质是窗口模式，所以即使强行的选择FLIP的方式，D3D也会为程序分配一个额外的后台buffer，然后以COPY的方式进行Presenting。
+
+       以下是MSDN上对这个参数的解释。
+
+Member of the D3DSWAPEFFECT enumerated type. The runtime will guarantee the implied semantics concerning buffer swap behavior; therefore, if Windowed is TRUE and SwapEffect is set to D3DSWAPEFFECT_FLIP, the runtime will create one extra back buffer and copy whichever becomes the front buffer at presentation time. 
+
+ 
+
+至于刷新率的问题，我们再来看一下D3DPRESENT_PARAMETER的参数：UINT FullScreen_RefreshRateInHz。这个参数MSDN上有一个解释：全屏模式下的屏幕刷新率。如果窗口模式，则必须为0。因此，我们可以得出结论：在真全屏模式下，可以定义自己的屏幕刷新率。而在伪全屏模式下，屏幕刷新率必须与桌面的刷新率一致。这也是全屏模式给人感觉更快的原因之一。当然，无论真伪全屏，其刷新率都受到硬件的限制。
+
+ 
+
+前面所说的第三个方面，真全屏独立占用显存。这个很容易理解，在这里不累赘了。
+
+3.2为什么伪全屏会改变桌面分辨率
+玩过穿越火线的同学都知道，在穿越火线中按alt+tab切回桌面，桌面分辨率会变为与游戏中的分辨率一致。这是很多伪全屏游戏都共有的问题。
+
+在伪全屏的游戏中，修改游戏分辨率的实质是：先修改桌面的分辨率，再将游戏窗口平铺整个屏幕，从而能够达到修改游戏分辨率的效果。从伪全屏的游戏切换回桌面时，实际只是把游戏窗口最小化而直接显示桌面，桌面分辨率不会发生变化。只有当游戏退出的时候，游戏中的逻辑才会恢复桌面的分辨率。所以，只有当退出游戏时，桌面才可以恢复到原来的分辨率。 
+
+真全屏游戏中的按alt+tab切出游戏后，D3D设备会直接丢失。桌面重新接管显卡资源，操作系统会为其恢复进入游戏之前的现场（包括显示模式）。重新回到游戏时，重新填充D3DPRESENT_PARAMETERS参数-> device->Reset()-> 重新申请显存资源-> 恢复渲染状态 。因此从真全屏的游戏中切回桌面不会影响桌面的分辨率。
+
+当然，在伪全屏中也可以避免这个问题。游戏也可以处理窗口最小化的消息，当游戏切到桌面就恢复桌面原来的分辨率。但是，这样做就失去了伪全屏的优势，修改桌面分辨率也是一件相当耗费时间和资源的事情。而使用伪全屏技术的初衷就是可让用户更加方便的在各个窗口中切换。
+
+3.3 为什么真全屏会丢失输入法的皮肤
+       很多研发初期的游戏，在全屏模式下都会存在输入法的选词框无法显示的问题。或者在一些比较差的机器上，会出现输入法的选词框持续闪烁，无法显示。而对比窗口模式，则不存在该问题。因此在输入法兼容性测试中，我们一般都会要求全屏模式和窗口模式分别测试。那么为什么会出现这样的情况呢？
+
+这个问题的实质是：输入法的选词框也是窗口，而真全屏情况下，游戏独占显存，每次刷新游戏画面都会将输入法窗口隐藏。所以会导致选词框的闪烁问题。 伪全屏则没有这个问题。很多游戏也会通过伪全屏的方式来解决这个问题。 
+
+一般来说，真全屏下解决这个问题的方法是：自己调用IME接口，自己绘制选字栏。留心的话，你会发现真全屏模式下，无论你使用搜狗输入法还是QQ输入法，它原本的输入法皮肤都会丢失，而变成一样的输入框。
+
+4 总结
+最后总结一下真伪全屏的优劣，如下表。
+
+ 
+ 真全屏
+ 伪全屏
+ 
+优点
+ 速度快 
+ 能够快捷地切换不同进程 
+
+兼容输入法 
+
+显卡驱动兼容性好 
+ 
+缺点
+ 存在兼容性问题 
+
+输入法需要单独处理 
+ 速度慢 
+ 
+
+ 
+
+从表中可以看出，真全屏的主要优势在于它的运行速度。但是随着硬件的不断发展，显卡的处理速度和显存不在成为瓶颈，伪全屏也是一个不错的选择。当然每一款游戏的目标不同，应该针对自身的情况，做出最优的选择。

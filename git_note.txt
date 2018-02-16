@@ -1,0 +1,24 @@
+ git note 
+1 设置用户名。
+   git config --globlal user.name ‘liuqiang’ 
+2 设置用户邮箱
+   Git config --global user.email ‘3224744965@qq.com’
+3 查看设置
+   Git config —list
+
+
+Cd test
+Git init// gererate .git
+
+//添加修改文件
+Git status
+Git add test.h// add to temperate area
+Git status
+Git commit -m “”//add to remote area
+Git status
+／／删除文件
+git rm test.h
+
+git push
+
+
